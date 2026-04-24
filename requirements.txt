@@ -7,3 +7,4 @@ requests
 pydantic
 PyCryptodome
 xmltodict
+python-dotenv

@@ -1,5 +1,7 @@
+import os
 import time
 import traceback
+
 import aiohttp
 import redis
 import uvicorn
@@ -8,27 +10,36 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.logger import logger
 from fastapi.responses import Response
 from pydantic import BaseModel
-from WxCrypt.WXBizMsgCrypt3 import WXBizMsgCrypt
+from WxCrypt.WXBizMsgCrypt import WXBizMsgCrypt
+from dotenv import load_dotenv
 from tasks import process_ai_request
+
+load_dotenv()
 
 app = FastAPI()
 
 # Redis 连接
-redis_client = redis.Redis(host='localhost', port=6379, db=0)
-redis_client.flushdb()
-# Dify API 的 URL（替换为你的实际 URL）
-DIFY_API_URL = 'http://xxx/v1/chat-messages'
-DIFY_API_KEY = 'app-xxxx'
+REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
+REDIS_PORT = int(os.getenv('REDIS_PORT', '6379'))
+REDIS_DB = int(os.getenv('REDIS_DB', '0'))
+REDIS_FLUSH_ON_START = os.getenv('REDIS_FLUSH_ON_START', 'false').lower() == 'true'
+
+redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB)
+if REDIS_FLUSH_ON_START:
+    redis_client.flushdb()
 
 # 企业微信被动消息解密配置
-wx_Token = 'xxxx'
-wx_EncodingAESKey = 'xxxx'
+wx_Token = os.getenv('WX_TOKEN', '')
+wx_EncodingAESKey = os.getenv('WX_ENCODING_AES_KEY', '')
 # 企业id
-corp_id = 'xxxx'
+corp_id = os.getenv('CORP_ID', '')
 # 企业应用secret
-corp_secret = 'xxx-xxx'
+corp_secret = os.getenv('CORP_SECRET', '')
 # 企业微信应用请求的token
-wx_token_key = 'wechat_access_token'
+wx_token_key = os.getenv('WECHAT_ACCESS_TOKEN_KEY', 'wechat_access_token')
+
+APP_HOST = os.getenv('APP_HOST', '0.0.0.0')
+APP_PORT = int(os.getenv('APP_PORT', '80'))
 
 try:
     wxcpt = WXBizMsgCrypt(wx_Token, wx_EncodingAESKey, corp_id)
@@ -187,4 +198,4 @@ async def verify_callback_url(msg_signature: str, timestamp: str, nonce: str, ec
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=80)
+    uvicorn.run(app, host=APP_HOST, port=APP_PORT)
