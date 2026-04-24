@@ -1,0 +1,70 @@
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        DEBIAN_MIRROR: mirrors.tuna.tsinghua.edu.cn
+        PIP_INDEX_URL: https://pypi.tuna.tsinghua.edu.cn/simple
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      APP_HOST: 0.0.0.0
+      APP_PORT: 80
+    command:
+      - sh
+      - -c
+      - exec uvicorn main:app --host "$${APP_HOST:-0.0.0.0}" --port "$${APP_PORT:-80}"
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - "80:80"
+    volumes:
+      - ../log:/app/log
+
+  worker:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        DEBIAN_MIRROR: mirrors.tuna.tsinghua.edu.cn
+        PIP_INDEX_URL: https://pypi.tuna.tsinghua.edu.cn/simple
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_LOG_LEVEL: info
+    command:
+      - sh
+      - -c
+      - exec celery -A tasks worker --loglevel="$${CELERY_LOG_LEVEL:-info}"
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ../log:/app/log
+
+volumes:
+  redis-data:
